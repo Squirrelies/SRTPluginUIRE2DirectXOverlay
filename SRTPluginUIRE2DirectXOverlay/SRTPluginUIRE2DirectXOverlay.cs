@@ -5,6 +5,7 @@ using SRTPluginProviderRE2;
 using SRTPluginProviderRE2.Structures;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace SRTPluginUIRE2DirectXOverlay
@@ -22,10 +23,7 @@ namespace SRTPluginUIRE2DirectXOverlay
         private Graphics _graphics;
         private SharpDX.Direct2D1.WindowRenderTarget _device;
 
-        private Font _consolas9Bold; // Stats
-        private Font _consolas10Bold; // Enemy HP
-        private Font _consolas14Bold; // HP
-        private Font _consolas16Bold; // IGT
+        private Font _consolasBold;
 
         private SolidBrush _black;
         private SolidBrush _white;
@@ -41,6 +39,7 @@ namespace SRTPluginUIRE2DirectXOverlay
         private SharpDX.Direct2D1.Bitmap _invItemSheet2;
         private int INV_SLOT_WIDTH;
         private int INV_SLOT_HEIGHT;
+        private Options options;
 
         [STAThread]
         public int Startup(IPluginHostDelegates hostDelegates)
@@ -76,10 +75,7 @@ namespace SRTPluginUIRE2DirectXOverlay
             // Get a refernence to the underlying RenderTarget from SharpDX. This'll be used to draw portions of images.
             _device = (SharpDX.Direct2D1.WindowRenderTarget)typeof(Graphics).GetField("_device", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(_graphics);
 
-            _consolas9Bold = _graphics?.CreateFont("Consolas", 9, true);
-            _consolas10Bold = _graphics?.CreateFont("Consolas", 10, true);
-            _consolas14Bold = _graphics?.CreateFont("Consolas", 14, true);
-            _consolas16Bold = _graphics?.CreateFont("Consolas", 16, true);
+            _consolasBold = _graphics?.CreateFont("Consolas", 12, true);
 
             _black = _graphics?.CreateSolidBrush(0, 0, 0);
             _white = _graphics?.CreateSolidBrush(255, 255, 255);
@@ -89,13 +85,15 @@ namespace SRTPluginUIRE2DirectXOverlay
             _lawngreen = _graphics?.CreateSolidBrush(124, 252, 0);
             _goldenrod = _graphics?.CreateSolidBrush(218, 165, 32);
 
-            INV_SLOT_WIDTH = (int)Math.Round(112d * 1d, MidpointRounding.AwayFromZero); // Individual inventory slot width.
-            INV_SLOT_HEIGHT = (int)Math.Round(112d * 1d, MidpointRounding.AwayFromZero); // Individual inventory slot height.
+            options = new Options();
+            options.GetOptions();
+            //INV_SLOT_WIDTH = (int)Math.Round(112d * scalingFactor, MidpointRounding.AwayFromZero); // Individual inventory slot width.
+            //INV_SLOT_HEIGHT = (int)Math.Round(112d * scalingFactor, MidpointRounding.AwayFromZero); // Individual inventory slot height.
+            INV_SLOT_WIDTH = 112;
+            INV_SLOT_HEIGHT = 112;
 
             _invItemSheet1 = ImageLoader.LoadBitmap(_device, Properties.Resources.ui0100_iam_texout);
             _invItemSheet2 = ImageLoader.LoadBitmap(_device, Properties.Resources._40d_texout);
-            //_invItemSheet1 = _graphics?.CreateImage(Properties.Resources.ui0100_iam_texout).Bitmap;
-            //_invItemSheet2 = _graphics?.CreateImage(Properties.Resources._40d_texout).Bitmap;
 
             GenerateClipping();
 
@@ -118,10 +116,7 @@ namespace SRTPluginUIRE2DirectXOverlay
             _white?.Dispose();
             _black?.Dispose();
 
-            _consolas16Bold?.Dispose();
-            _consolas14Bold?.Dispose();
-            _consolas10Bold?.Dispose();
-            _consolas9Bold?.Dispose();
+            _consolasBold?.Dispose();
 
             _device = null; // We didn't create this object so we probably shouldn't be the one to dispose of it. Just set the variable to null so the reference isn't held.
             _graphics?.Dispose(); // This should technically be the one to dispose of the _device object since it was pulled from this instance.
@@ -139,7 +134,11 @@ namespace SRTPluginUIRE2DirectXOverlay
                 this.gameMemory = (IGameMemoryRE2)gameMemory;
                 _graphics?.BeginScene();
                 _graphics?.ClearScene();
+                if (options.ScalingFactor != 1f)
+                    _device.Transform = new SharpDX.Mathematics.Interop.RawMatrix3x2(options.ScalingFactor, 0f, 0f, options.ScalingFactor, 0f, 0f);
                 DrawOverlay();
+                if (options.ScalingFactor != 1f)
+                    _device.Transform = new SharpDX.Mathematics.Interop.RawMatrix3x2(1f, 0f, 0f, 1f, 0f, 0f);
             }
             finally
             {
@@ -150,23 +149,40 @@ namespace SRTPluginUIRE2DirectXOverlay
 
         private void DrawOverlay()
         {
-            int baseXOffset = 10;
-            int baseYOffset = 20;
+            float baseXOffset = 5f;
+            float baseYOffset = 30f;
 
             // Player HP
-            int playerHPXOffset = baseXOffset + 0;
-            int playerHPYOffset = baseYOffset + 0;
+            float playerHPXOffset = baseXOffset + 80f;
+            float playerHPYOffset = baseYOffset + 0f;
             if (gameMemory.PlayerCurrentHealth > 1200 || this.gameMemory.PlayerCurrentHealth <= 0)
-                _graphics?.DrawText(_consolas14Bold, _red, playerHPXOffset + 0, playerHPYOffset + 0, "DEAD");
+                _graphics?.DrawText(_consolasBold, 36f, _red, playerHPXOffset, playerHPYOffset, "DEAD");
             else if (gameMemory.PlayerCurrentHealth >= 801) // Fine (Green)
-                _graphics?.DrawText(_consolas14Bold, _lawngreen, playerHPXOffset + 0, playerHPYOffset + 0, string.Format("{0}", gameMemory.PlayerCurrentHealth));
+                _graphics?.DrawText(_consolasBold, 36f, _lawngreen, playerHPXOffset, playerHPYOffset, string.Format("{0}", gameMemory.PlayerCurrentHealth));
             else if (gameMemory.PlayerCurrentHealth <= 800 && this.gameMemory.PlayerCurrentHealth >= 361) // Caution (Yellow)
-                _graphics?.DrawText(_consolas14Bold, _goldenrod, playerHPXOffset + 0, playerHPYOffset + 0, string.Format("{0}", gameMemory.PlayerCurrentHealth));
+                _graphics?.DrawText(_consolasBold, 36f, _goldenrod, playerHPXOffset, playerHPYOffset, string.Format("{0}", gameMemory.PlayerCurrentHealth));
             else if (gameMemory.PlayerCurrentHealth <= 360) // Danger (Red)
-                _graphics?.DrawText(_consolas14Bold, _red, playerHPXOffset + 0, playerHPYOffset + 0, string.Format("{0}", gameMemory.PlayerCurrentHealth));
+                _graphics?.DrawText(_consolasBold, 36f, _red, playerHPXOffset, playerHPYOffset, string.Format("{0}", gameMemory.PlayerCurrentHealth));
 
-            int invXOffset = baseXOffset + 50;
-            int invYOffset = baseYOffset + 0;
+            // Stats
+            float statsXOffset = baseXOffset + 5f;
+            float statsYOffset = baseYOffset + 40f;
+            _graphics?.DrawText(_consolasBold, 36f, _white, statsXOffset, statsYOffset, gameMemory.IGTFormattedString);
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 42, "Raw IGT");
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("A:{0}", gameMemory.IGTRunningTimer.ToString("00000000000000000000")));
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("C:{0}", gameMemory.IGTCutsceneTimer.ToString("00000000000000000000")));
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("M:{0}", gameMemory.IGTMenuTimer.ToString("00000000000000000000")));
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("P:{0}", gameMemory.IGTPausedTimer.ToString("00000000000000000000")));
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("DA Rank: {0}", gameMemory.Rank.ToString()));
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("DA Score: {0}", gameMemory.RankScore.ToString()));
+            // Enemy HP
+            _graphics?.DrawText(_consolasBold, 20f, _red, statsXOffset, statsYOffset += 34f, "Enemy HP");
+            foreach (EnemyHP enemyHP in gameMemory.EnemyHealth.Where(a => a.IsAlive).OrderBy(a => a.IsTrigger).ThenBy(a => a.Percentage).ThenByDescending(a => a.CurrentHP))
+                DrawProgressBar(ref statsXOffset, ref statsYOffset, enemyHP.CurrentHP, enemyHP.Percentage);
+
+            // Inventory
+            float invXOffset = baseXOffset + 265f;
+            float invYOffset = baseYOffset + 0f;
             for (int i = 0; i < gameMemory.PlayerInventory.Length; ++i)
             {
                 // Only do logic for non-blank and non-broken items.
@@ -174,15 +190,15 @@ namespace SRTPluginUIRE2DirectXOverlay
                 {
                     int slotColumn = gameMemory.PlayerInventory[i].SlotPosition % 4;
                     int slotRow = gameMemory.PlayerInventory[i].SlotPosition / 4;
-                    int imageX = invXOffset + (slotColumn * INV_SLOT_WIDTH);
-                    int imageY = invYOffset + (slotRow * INV_SLOT_HEIGHT);
-                    int textX = imageX + INV_SLOT_WIDTH;
-                    int textY = imageY + INV_SLOT_HEIGHT;
-                    bool evenSlotColumn = slotColumn % 2 == 0;
+                    float imageX = invXOffset + (slotColumn * INV_SLOT_WIDTH);
+                    float imageY = invYOffset + (slotRow * INV_SLOT_HEIGHT);
+                    float textX = imageX + (INV_SLOT_WIDTH * options.ScalingFactor);
+                    float textY = imageY + (INV_SLOT_HEIGHT * options.ScalingFactor);
                     SolidBrush textBrush = _white;
                     if (gameMemory.PlayerInventory[i].Quantity == 0)
                         textBrush = _darkred;
 
+                    // Get the region of the inventory sheet where this item's icon resides.
                     SharpDX.Mathematics.Interop.RawRectangleF imageRegion;
                     Weapon weapon;
                     if (gameMemory.PlayerInventory[i].IsItem && itemToImageTranslation.ContainsKey(gameMemory.PlayerInventory[i].ItemID))
@@ -194,52 +210,37 @@ namespace SRTPluginUIRE2DirectXOverlay
                     imageRegion.Right += imageRegion.Left;
                     imageRegion.Bottom += imageRegion.Top;
 
-                    // Double-slot item.
+                    // Get the region to draw our item icon to.
                     SharpDX.Mathematics.Interop.RawRectangleF drawRegion;
                     if (imageRegion.Right - imageRegion.Left == INV_SLOT_WIDTH * 2f)
                     {
+                        // Double-slot item, adjust the draw region width and text's X coordinate.
                         textX += INV_SLOT_WIDTH;
                         drawRegion = new SharpDX.Mathematics.Interop.RawRectangleF(imageX, imageY, INV_SLOT_WIDTH * 2, INV_SLOT_HEIGHT);
                     }
-                    else
+                    else // Normal-sized icon.
                         drawRegion = new SharpDX.Mathematics.Interop.RawRectangleF(imageX, imageY, INV_SLOT_WIDTH, INV_SLOT_HEIGHT);
                     drawRegion.Right += drawRegion.Left;
                     drawRegion.Bottom += drawRegion.Top;
 
-                    if (gameMemory.PlayerInventory[i].IsItem && itemToImageTranslation.ContainsKey(gameMemory.PlayerInventory[i].ItemID))
-                    {
-                        if (gameMemory.PlayerInventory[i].ItemID == ItemEnumeration.OldKey)
-                            _device?.DrawBitmap(_invItemSheet2, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
-                        else
-                            _device?.DrawBitmap(_invItemSheet1, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
-                    }
-                    else if (gameMemory.PlayerInventory[i].IsWeapon && weaponToImageTranslation.ContainsKey(weapon = new Weapon() { WeaponID = gameMemory.PlayerInventory[i].WeaponID, Attachments = gameMemory.PlayerInventory[i].Attachments }))
+                    // If we're one of the DLC items, use a different sheet.
+                    if (gameMemory.PlayerInventory[i].ItemID == ItemEnumeration.OldKey)
+                        _device?.DrawBitmap(_invItemSheet2, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
+                    else // Otherwise, use the main sheet.
                         _device?.DrawBitmap(_invItemSheet1, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
 
-                    _graphics?.DrawText(_consolas14Bold, textBrush, textX, textY, (gameMemory.PlayerInventory[i].Quantity != -1) ? gameMemory.PlayerInventory[i].Quantity.ToString() : "∞");
+                    // Draw the quantity text.
+                    _graphics?.DrawText(_consolasBold, 22f, textBrush, textX, textY, (gameMemory.PlayerInventory[i].Quantity != -1) ? gameMemory.PlayerInventory[i].Quantity.ToString() : "∞");
                 }
             }
         }
 
-        public void DrawInventoryIcon(float x, float y, int iconCol, int iconRow, bool dualSlot = false)
+        private void DrawProgressBar(ref float xOffset, ref float yOffset, int health, float percentage = 1f)
         {
-            SharpDX.Mathematics.Interop.RawRectangleF[] invIconRects = GetInventoryIconRectangles(x, y, iconCol, iconRow, dualSlot);
-            _device?.DrawBitmap(_invItemSheet1, invIconRects[0], 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, invIconRects[1]);
+            _graphics.DrawRectangle(_grey, xOffset, yOffset += 28f, xOffset + 250f, yOffset + 22f, 4f);
+            _graphics.FillRectangle(_darkred, xOffset + 1f, yOffset + 1f, xOffset + (247f * percentage), yOffset + 20f);
+            _graphics.DrawText(_consolasBold, 20f, _red, xOffset + 6f, yOffset - 2f, string.Format("{0} {1:P1}", health, percentage));
         }
-
-        public SharpDX.Mathematics.Interop.RawRectangleF[] GetInventoryIconRectangles(float drawX, float drawY, float iconX, float iconY, float iconWidth = 112f, float iconHeight = 112f) =>
-             new SharpDX.Mathematics.Interop.RawRectangleF[2]
-             {
-                 new SharpDX.Mathematics.Interop.RawRectangleF(drawX, drawY, drawX + iconWidth, drawY + iconHeight),
-                 new SharpDX.Mathematics.Interop.RawRectangleF(iconX, iconY, iconX + iconWidth, iconY + iconHeight)
-             };
-
-        public SharpDX.Mathematics.Interop.RawRectangleF[] GetInventoryIconRectangles(float drawX, float drawY, int iconCol, int iconRow, bool dualSlot = false, float iconWidth = 112f, float iconHeight = 112f) =>
-            new SharpDX.Mathematics.Interop.RawRectangleF[2]
-            {
-                 new SharpDX.Mathematics.Interop.RawRectangleF(drawX, drawY, drawX + (iconWidth * (dualSlot ? 2 : 1)), drawY + iconHeight),
-                 new SharpDX.Mathematics.Interop.RawRectangleF(iconCol * (iconWidth * (dualSlot ? 2 : 1)), iconRow * iconHeight, (iconCol * (iconWidth * (dualSlot ? 2 : 1))) + (iconWidth * (dualSlot ? 2 : 1)), (iconRow * iconHeight) + iconHeight)
-            };
 
         public void GenerateClipping()
         {
