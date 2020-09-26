@@ -46,6 +46,9 @@ namespace SRTPluginUIRE2DirectXOverlay
         {
             this.hostDelegates = hostDelegates;
 
+            options = new Options();
+            options.GetOptions();
+
             DEVMODE devMode = default;
             devMode.dmSize = (short)Marshal.SizeOf<DEVMODE>();
             PInvoke.EnumDisplaySettings(null, -1, ref devMode);
@@ -85,17 +88,15 @@ namespace SRTPluginUIRE2DirectXOverlay
             _lawngreen = _graphics?.CreateSolidBrush(124, 252, 0);
             _goldenrod = _graphics?.CreateSolidBrush(218, 165, 32);
 
-            options = new Options();
-            options.GetOptions();
-            //INV_SLOT_WIDTH = (int)Math.Round(112d * scalingFactor, MidpointRounding.AwayFromZero); // Individual inventory slot width.
-            //INV_SLOT_HEIGHT = (int)Math.Round(112d * scalingFactor, MidpointRounding.AwayFromZero); // Individual inventory slot height.
-            INV_SLOT_WIDTH = 112;
-            INV_SLOT_HEIGHT = 112;
+            if (!options.Flags.HasFlag(ProgramFlags.NoInventory))
+            {
+                INV_SLOT_WIDTH = 112;
+                INV_SLOT_HEIGHT = 112;
 
-            _invItemSheet1 = ImageLoader.LoadBitmap(_device, Properties.Resources.ui0100_iam_texout);
-            _invItemSheet2 = ImageLoader.LoadBitmap(_device, Properties.Resources._40d_texout);
-
-            GenerateClipping();
+                _invItemSheet1 = ImageLoader.LoadBitmap(_device, Properties.Resources.ui0100_iam_texout);
+                _invItemSheet2 = ImageLoader.LoadBitmap(_device, Properties.Resources._40d_texout);
+                GenerateClipping();
+            }
 
             return 0;
         }
@@ -168,73 +169,81 @@ namespace SRTPluginUIRE2DirectXOverlay
             float statsXOffset = baseXOffset + 5f;
             float statsYOffset = baseYOffset + 40f;
             _graphics?.DrawText(_consolasBold, 36f, _white, statsXOffset, statsYOffset, gameMemory.IGTFormattedString);
-            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 42, "Raw IGT");
-            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("A:{0}", gameMemory.IGTRunningTimer.ToString("00000000000000000000")));
-            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("C:{0}", gameMemory.IGTCutsceneTimer.ToString("00000000000000000000")));
-            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("M:{0}", gameMemory.IGTMenuTimer.ToString("00000000000000000000")));
-            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("P:{0}", gameMemory.IGTPausedTimer.ToString("00000000000000000000")));
+            statsYOffset += 24;
+            if (options.Flags.HasFlag(ProgramFlags.Debug))
+            {
+                _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, "Raw IGT");
+                _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("A:{0}", gameMemory.IGTRunningTimer.ToString("00000000000000000000")));
+                _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("C:{0}", gameMemory.IGTCutsceneTimer.ToString("00000000000000000000")));
+                _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("M:{0}", gameMemory.IGTMenuTimer.ToString("00000000000000000000")));
+                _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("P:{0}", gameMemory.IGTPausedTimer.ToString("00000000000000000000")));
+            }
             _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("DA Rank: {0}", gameMemory.Rank.ToString()));
-            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("DA Score: {0}", gameMemory.RankScore.ToString()));
+            _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("DA Score: {0}", Math.Round(gameMemory.RankScore, MidpointRounding.AwayFromZero).ToString()));
+
             // Enemy HP
             _graphics?.DrawText(_consolasBold, 20f, _red, statsXOffset, statsYOffset += 34f, "Enemy HP");
             foreach (EnemyHP enemyHP in gameMemory.EnemyHealth.Where(a => a.IsAlive).OrderBy(a => a.IsTrigger).ThenBy(a => a.Percentage).ThenByDescending(a => a.CurrentHP))
                 DrawProgressBar(ref statsXOffset, ref statsYOffset, enemyHP.CurrentHP, enemyHP.Percentage);
 
             // Inventory
-            float invXOffset = baseXOffset + 265f;
-            float invYOffset = baseYOffset + 0f;
-            if (itemToImageTranslation != null && weaponToImageTranslation != null)
+            if (!options.Flags.HasFlag(ProgramFlags.NoInventory))
             {
-                for (int i = 0; i < gameMemory.PlayerInventory.Length; ++i)
+                float invXOffset = baseXOffset + 265f;
+                float invYOffset = baseYOffset + 0f;
+                if (itemToImageTranslation != null && weaponToImageTranslation != null)
                 {
-                    // Only do logic for non-blank and non-broken items.
-                    if (gameMemory.PlayerInventory[i] != default && gameMemory.PlayerInventory[i].SlotPosition >= 0 && gameMemory.PlayerInventory[i].SlotPosition <= 19 && !gameMemory.PlayerInventory[i].IsEmptySlot)
+                    for (int i = 0; i < gameMemory.PlayerInventory.Length; ++i)
                     {
-                        int slotColumn = gameMemory.PlayerInventory[i].SlotPosition % 4;
-                        int slotRow = gameMemory.PlayerInventory[i].SlotPosition / 4;
-                        float imageX = invXOffset + (slotColumn * INV_SLOT_WIDTH);
-                        float imageY = invYOffset + (slotRow * INV_SLOT_HEIGHT);
-                        //float textX = imageX + (INV_SLOT_WIDTH * options.ScalingFactor);
-                        //float textY = imageY + (INV_SLOT_HEIGHT * options.ScalingFactor);
-                        float textX = (imageX + INV_SLOT_WIDTH) * 0.96f;
-                        float textY = (imageY + INV_SLOT_HEIGHT) * 0.92f;
-                        SolidBrush textBrush = _white;
-                        if (gameMemory.PlayerInventory[i].Quantity == 0)
-                            textBrush = _darkred;
-
-                        // Get the region of the inventory sheet where this item's icon resides.
-                        SharpDX.Mathematics.Interop.RawRectangleF imageRegion;
-                        Weapon weapon;
-                        if (gameMemory.PlayerInventory[i].IsItem && itemToImageTranslation.ContainsKey(gameMemory.PlayerInventory[i].ItemID))
-                            imageRegion = itemToImageTranslation[gameMemory.PlayerInventory[i].ItemID];
-                        else if (gameMemory.PlayerInventory[i].IsWeapon && weaponToImageTranslation.ContainsKey(weapon = new Weapon() { WeaponID = gameMemory.PlayerInventory[i].WeaponID, Attachments = gameMemory.PlayerInventory[i].Attachments }))
-                            imageRegion = weaponToImageTranslation[weapon];
-                        else
-                            imageRegion = new SharpDX.Mathematics.Interop.RawRectangleF(0, 0, INV_SLOT_WIDTH, INV_SLOT_HEIGHT);
-                        imageRegion.Right += imageRegion.Left;
-                        imageRegion.Bottom += imageRegion.Top;
-
-                        // Get the region to draw our item icon to.
-                        SharpDX.Mathematics.Interop.RawRectangleF drawRegion;
-                        if (imageRegion.Right - imageRegion.Left == INV_SLOT_WIDTH * 2f)
+                        // Only do logic for non-blank and non-broken items.
+                        if (gameMemory.PlayerInventory[i] != default && gameMemory.PlayerInventory[i].SlotPosition >= 0 && gameMemory.PlayerInventory[i].SlotPosition <= 19 && !gameMemory.PlayerInventory[i].IsEmptySlot)
                         {
-                            // Double-slot item, adjust the draw region width and text's X coordinate.
-                            textX += INV_SLOT_WIDTH;
-                            drawRegion = new SharpDX.Mathematics.Interop.RawRectangleF(imageX, imageY, INV_SLOT_WIDTH * 2, INV_SLOT_HEIGHT);
+                            int slotColumn = gameMemory.PlayerInventory[i].SlotPosition % 4;
+                            int slotRow = gameMemory.PlayerInventory[i].SlotPosition / 4;
+                            float imageX = invXOffset + (slotColumn * INV_SLOT_WIDTH);
+                            float imageY = invYOffset + (slotRow * INV_SLOT_HEIGHT);
+                            //float textX = imageX + (INV_SLOT_WIDTH * options.ScalingFactor);
+                            //float textY = imageY + (INV_SLOT_HEIGHT * options.ScalingFactor);
+                            float textX = (imageX + INV_SLOT_WIDTH) * 0.96f;
+                            float textY = (imageY + INV_SLOT_HEIGHT) * 0.92f;
+                            SolidBrush textBrush = _white;
+                            if (gameMemory.PlayerInventory[i].Quantity == 0)
+                                textBrush = _darkred;
+
+                            // Get the region of the inventory sheet where this item's icon resides.
+                            SharpDX.Mathematics.Interop.RawRectangleF imageRegion;
+                            Weapon weapon;
+                            if (gameMemory.PlayerInventory[i].IsItem && itemToImageTranslation.ContainsKey(gameMemory.PlayerInventory[i].ItemID))
+                                imageRegion = itemToImageTranslation[gameMemory.PlayerInventory[i].ItemID];
+                            else if (gameMemory.PlayerInventory[i].IsWeapon && weaponToImageTranslation.ContainsKey(weapon = new Weapon() { WeaponID = gameMemory.PlayerInventory[i].WeaponID, Attachments = gameMemory.PlayerInventory[i].Attachments }))
+                                imageRegion = weaponToImageTranslation[weapon];
+                            else
+                                imageRegion = new SharpDX.Mathematics.Interop.RawRectangleF(0, 0, INV_SLOT_WIDTH, INV_SLOT_HEIGHT);
+                            imageRegion.Right += imageRegion.Left;
+                            imageRegion.Bottom += imageRegion.Top;
+
+                            // Get the region to draw our item icon to.
+                            SharpDX.Mathematics.Interop.RawRectangleF drawRegion;
+                            if (imageRegion.Right - imageRegion.Left == INV_SLOT_WIDTH * 2f)
+                            {
+                                // Double-slot item, adjust the draw region width and text's X coordinate.
+                                textX += INV_SLOT_WIDTH;
+                                drawRegion = new SharpDX.Mathematics.Interop.RawRectangleF(imageX, imageY, INV_SLOT_WIDTH * 2, INV_SLOT_HEIGHT);
+                            }
+                            else // Normal-sized icon.
+                                drawRegion = new SharpDX.Mathematics.Interop.RawRectangleF(imageX, imageY, INV_SLOT_WIDTH, INV_SLOT_HEIGHT);
+                            drawRegion.Right += drawRegion.Left;
+                            drawRegion.Bottom += drawRegion.Top;
+
+                            // If we're one of the DLC items, use a different sheet.
+                            if (gameMemory.PlayerInventory[i].ItemID == ItemEnumeration.OldKey)
+                                _device?.DrawBitmap(_invItemSheet2, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
+                            else // Otherwise, use the main sheet.
+                                _device?.DrawBitmap(_invItemSheet1, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
+
+                            // Draw the quantity text.
+                            _graphics?.DrawText(_consolasBold, 22f, textBrush, textX, textY, (gameMemory.PlayerInventory[i].Quantity != -1) ? gameMemory.PlayerInventory[i].Quantity.ToString() : "∞");
                         }
-                        else // Normal-sized icon.
-                            drawRegion = new SharpDX.Mathematics.Interop.RawRectangleF(imageX, imageY, INV_SLOT_WIDTH, INV_SLOT_HEIGHT);
-                        drawRegion.Right += drawRegion.Left;
-                        drawRegion.Bottom += drawRegion.Top;
-
-                        // If we're one of the DLC items, use a different sheet.
-                        if (gameMemory.PlayerInventory[i].ItemID == ItemEnumeration.OldKey)
-                            _device?.DrawBitmap(_invItemSheet2, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
-                        else // Otherwise, use the main sheet.
-                            _device?.DrawBitmap(_invItemSheet1, drawRegion, 1f, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, imageRegion);
-
-                        // Draw the quantity text.
-                        _graphics?.DrawText(_consolasBold, 22f, textBrush, textX, textY, (gameMemory.PlayerInventory[i].Quantity != -1) ? gameMemory.PlayerInventory[i].Quantity.ToString() : "∞");
                     }
                 }
             }
