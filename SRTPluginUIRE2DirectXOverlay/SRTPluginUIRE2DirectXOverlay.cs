@@ -194,8 +194,10 @@ namespace SRTPluginUIRE2DirectXOverlay
                         int slotRow = gameMemory.PlayerInventory[i].SlotPosition / 4;
                         float imageX = invXOffset + (slotColumn * INV_SLOT_WIDTH);
                         float imageY = invYOffset + (slotRow * INV_SLOT_HEIGHT);
-                        float textX = imageX + (INV_SLOT_WIDTH * options.ScalingFactor);
-                        float textY = imageY + (INV_SLOT_HEIGHT * options.ScalingFactor);
+                        //float textX = imageX + (INV_SLOT_WIDTH * options.ScalingFactor);
+                        //float textY = imageY + (INV_SLOT_HEIGHT * options.ScalingFactor);
+                        float textX = (imageX + INV_SLOT_WIDTH) * 0.96f;
+                        float textY = (imageY + INV_SLOT_HEIGHT) * 0.92f;
                         SolidBrush textBrush = _white;
                         if (gameMemory.PlayerInventory[i].Quantity == 0)
                             textBrush = _darkred;
