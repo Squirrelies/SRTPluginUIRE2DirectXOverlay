@@ -5,6 +5,7 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <Authors>Travis J Gutjahr</Authors>
     <Company>Travis J Gutjahr</Company>
     <Copyright>Copyright © 2020 Travis J Gutjahr</Copyright>
