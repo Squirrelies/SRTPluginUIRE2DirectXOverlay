@@ -5,15 +5,16 @@ using SRTPluginProviderRE2;
 using SRTPluginProviderRE2.Structures;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace SRTPluginUIRE2DirectXOverlay
 {
-    public class SRTPluginUIRE2DirectXOverlay : IPluginUI
+    public class SRTPluginUIRE2DirectXOverlay : PluginBase, IPluginUI
     {
         internal static PluginInfo _Info = new PluginInfo();
-        public IPluginInfo Info => _Info;
+        public override IPluginInfo Info => _Info;
         public string RequiredProvider => "SRTPluginProviderRE2";
         private IPluginHostDelegates hostDelegates;
         private IGameMemoryRE2 gameMemory;
@@ -39,26 +40,28 @@ namespace SRTPluginUIRE2DirectXOverlay
         private SharpDX.Direct2D1.Bitmap _invItemSheet2;
         private int INV_SLOT_WIDTH;
         private int INV_SLOT_HEIGHT;
-        private Options options;
+        public PluginConfiguration config;
+        private Process GetProcess() => Process.GetProcessesByName("re2")?.FirstOrDefault();
+        private Process gameProcess;
+        private IntPtr gameWindowHandle;
 
         [STAThread]
-        public int Startup(IPluginHostDelegates hostDelegates)
+        public override int Startup(IPluginHostDelegates hostDelegates)
         {
             this.hostDelegates = hostDelegates;
+            config = LoadConfiguration<PluginConfiguration>();
 
-            options = new Options();
-            options.GetOptions();
+            gameProcess = GetProcess();
+            if (gameProcess == default)
+                return 1;
+            gameWindowHandle = gameProcess.MainWindowHandle;
 
             DEVMODE devMode = default;
             devMode.dmSize = (short)Marshal.SizeOf<DEVMODE>();
             PInvoke.EnumDisplaySettings(null, -1, ref devMode);
 
             // Create and initialize the overlay window.
-            _window = new OverlayWindow(0, 0, devMode.dmPelsWidth, devMode.dmPelsHeight)
-            {
-                IsTopmost = true,
-                IsVisible = true
-            };
+            _window = new OverlayWindow(0, 0, devMode.dmPelsWidth, devMode.dmPelsHeight);
             _window?.Create();
 
             // Create and initialize the graphics object.
@@ -88,7 +91,7 @@ namespace SRTPluginUIRE2DirectXOverlay
             _lawngreen = _graphics?.CreateSolidBrush(124, 252, 0);
             _goldenrod = _graphics?.CreateSolidBrush(218, 165, 32);
 
-            if (!options.Flags.HasFlag(ProgramFlags.NoInventory))
+            if (!config.NoInventory)
             {
                 INV_SLOT_WIDTH = 112;
                 INV_SLOT_HEIGHT = 112;
@@ -101,8 +104,10 @@ namespace SRTPluginUIRE2DirectXOverlay
             return 0;
         }
 
-        public int Shutdown()
+        public override int Shutdown()
         {
+            SaveConfiguration(config);
+
             weaponToImageTranslation = null;
             itemToImageTranslation = null;
 
@@ -125,26 +130,37 @@ namespace SRTPluginUIRE2DirectXOverlay
             _window?.Dispose();
             _window = null;
 
+            gameProcess?.Dispose();
+            gameProcess = null;
+
             return 0;
         }
 
         public int ReceiveData(object gameMemory)
         {
+            this.gameMemory = (IGameMemoryRE2)gameMemory;
+            _window?.PlaceAbove(gameWindowHandle);
+            _window?.FitTo(gameWindowHandle, true);
+
             try
             {
-                this.gameMemory = (IGameMemoryRE2)gameMemory;
                 _graphics?.BeginScene();
                 _graphics?.ClearScene();
-                if (options.ScalingFactor != 1f)
-                    _device.Transform = new SharpDX.Mathematics.Interop.RawMatrix3x2(options.ScalingFactor, 0f, 0f, options.ScalingFactor, 0f, 0f);
+                if (config.ScalingFactor != 1f)
+                    _device.Transform = new SharpDX.Mathematics.Interop.RawMatrix3x2(config.ScalingFactor, 0f, 0f, config.ScalingFactor, 0f, 0f);
                 DrawOverlay();
-                if (options.ScalingFactor != 1f)
+                if (config.ScalingFactor != 1f)
                     _device.Transform = new SharpDX.Mathematics.Interop.RawMatrix3x2(1f, 0f, 0f, 1f, 0f, 0f);
+            }
+            catch (Exception ex)
+            {
+                hostDelegates.ExceptionMessage.Invoke(ex);
             }
             finally
             {
                 _graphics?.EndScene();
             }
+
             return 0;
         }
 
@@ -170,7 +186,7 @@ namespace SRTPluginUIRE2DirectXOverlay
             float statsYOffset = baseYOffset + 40f;
             _graphics?.DrawText(_consolasBold, 36f, _white, statsXOffset, statsYOffset, gameMemory.IGTFormattedString);
             statsYOffset += 24;
-            if (options.Flags.HasFlag(ProgramFlags.Debug))
+            if (config.Debug)
             {
                 _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, "Raw IGT");
                 _graphics?.DrawText(_consolasBold, 20f, _grey, statsXOffset, statsYOffset += 24, string.Format("A:{0}", gameMemory.IGTRunningTimer.ToString("00000000000000000000")));
@@ -187,7 +203,7 @@ namespace SRTPluginUIRE2DirectXOverlay
                 DrawProgressBar(ref statsXOffset, ref statsYOffset, enemyHP.CurrentHP, enemyHP.Percentage);
 
             // Inventory
-            if (!options.Flags.HasFlag(ProgramFlags.NoInventory))
+            if (!config.NoInventory)
             {
                 float invXOffset = baseXOffset + 265f;
                 float invYOffset = baseYOffset + 0f;
