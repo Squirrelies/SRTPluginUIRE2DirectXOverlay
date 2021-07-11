@@ -297,7 +297,7 @@ namespace SRTPluginUIRE2DirectXOverlay
                     for (int i = 0; i < gameMemory.PlayerInventory.Length; ++i)
                     {
                         // Only do logic for non-blank and non-broken items.
-                        if (gameMemory.PlayerInventory[i] != default && gameMemory.PlayerInventory[i].SlotPosition >= 0 && gameMemory.PlayerInventory[i].SlotPosition <= 19 && !gameMemory.PlayerInventory[i].IsEmptySlot)
+                        if (gameMemory.PlayerInventory[i].SlotPosition >= 0 && gameMemory.PlayerInventory[i].SlotPosition <= 19 && !gameMemory.PlayerInventory[i].IsEmptySlot)
                         {
                             int slotColumn = gameMemory.PlayerInventory[i].SlotPosition % 4;
                             int slotRow = gameMemory.PlayerInventory[i].SlotPosition / 4;
